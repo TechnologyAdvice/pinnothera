@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/TechnologyAdvice/pinnothera/compare/v0.1.0...v0.1.1) (2024-03-28)
+
+
+### Bug Fixes
+
+* platform -&gt; platforms ([9f2a57a](https://github.com/TechnologyAdvice/pinnothera/commit/9f2a57a016935125580b34b759066feeca1c5a91))
+
 ## 0.1.0 (2024-03-28)
 
 
