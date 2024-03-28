@@ -52,7 +52,7 @@ jobs:
           push: true
           platforms: |
             linux/amd64
-          target: precompiled-pinn-image
+          target: pinn-image
           tags: |
             ${{ secrets.DOCKER_REPOSITORY }}:latest
             ${{ secrets.DOCKER_REPOSITORY }}:${{ needs.release.outputs.major }}
