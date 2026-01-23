@@ -88,6 +88,30 @@ impl<T: AsRef<str>> From<T> for EnvName {
 
 // </editor-fold desc="// EnvName ...">
 
+// <editor-fold desc="// FIFO Utilities ...">
+
+pub(crate) struct ResourceName;
+
+impl ResourceName {
+    pub fn is_fifo<T: AsRef<str>>(name: T) -> bool {
+        name.as_ref().ends_with(".fifo")
+    }
+
+
+    pub fn with_suffix<T: AsRef<str>>(name: T, suffix: &str) -> String {
+        let name = name.as_ref();
+        if Self::is_fifo(name) {
+            // must end in .fifo, so env suffix must come before
+            let base_name = &name[..name.len() - 5];
+            format!("{}-{}.fifo", base_name, suffix)
+        } else {
+            format!("{}-{}", name, suffix)
+        }
+    }
+}
+
+// </editor-fold desc="// FIFO Utilities ...">
+
 // <editor-fold desc="// SQSQueueConfig ...">
 
 #[derive(Clone, Debug, Default, Deserialize)]
