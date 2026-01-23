@@ -40,7 +40,6 @@ async fn create_topic<T: AsRef<str>>(topic: T) -> Result<SNSTopicARN, Terminator
     let topic_name = topic.as_ref();
     println!("Ensuring existence of topic: \"{}\"", topic_name);
 
-    let is_fifo_topic = ResourceName::is_fifo(topic_name);
     let topic: String = if CLUSTER_ENV.get().unwrap().borrow().is_unknown() {
         topic_name.to_string()
     } else {
