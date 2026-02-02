@@ -18,7 +18,7 @@ use once_cell::sync::OnceCell;
 // Project-Level Imports
 pub(crate) use cli::CLIArgs;
 pub(crate) use types::{
-    EnvName, PinnConfig, SNSTopicARN, SQSQueueARN, SQSQueueConfig, SQSQueueURL,
+    EnvName, PinnConfig, ResourceName, SNSTopicARN, SQSQueueARN, SQSQueueConfig, SQSQueueURL,
 };
 
 pub(crate) mod cli;
@@ -37,30 +37,33 @@ pub(crate) static CLI_ARGS: OnceCell<AtomicCell<CLIArgs>> = OnceCell::new();
 // <editor-fold desc="// SNS Topic Utilities ...">
 
 async fn create_topic<T: AsRef<str>>(topic: T) -> Result<SNSTopicARN, Terminator> {
-    println!("Ensuring existence of topic: \"{}\"", topic.as_ref());
+    let topic_name = topic.as_ref();
+    println!("Ensuring existence of topic: \"{}\"", topic_name);
 
     let topic: String = if CLUSTER_ENV.get().unwrap().borrow().is_unknown() {
-        topic.as_ref().to_string()
+        topic_name.to_string()
     } else {
         let suffix = CLUSTER_ENV.get().unwrap().borrow().as_suffix().to_string();
+        let suffixed_name = ResourceName::with_suffix(topic_name, &suffix);
         println!(
-            "Suffixing topic \"{}\" as \"{}-{}\" per in-cluster configuration...",
-            topic.as_ref(),
-            topic.as_ref(),
-            suffix
+            "Suffixing topic \"{}\" as \"{}\" per in-cluster configuration...",
+            topic_name, &suffixed_name
         );
-        format!("{}-{}", topic.as_ref(), suffix,)
+        suffixed_name
     };
 
-    let resp = match SNS_CLIENT
+    let mut create_topic_builder = SNS_CLIENT
         .get()
         .unwrap()
         .borrow()
         .create_topic()
-        .name(&topic)
-        .send()
-        .await
-    {
+        .name(&topic);
+
+    if ResourceName::is_fifo(&topic) {
+        create_topic_builder = create_topic_builder.attributes("FifoTopic", "true");
+    }
+
+    let resp = match create_topic_builder.send().await {
         Ok(response) => response,
         Err(error) => {
             println!("Could not create topic due to error:\n----- Create '{}' Error -----\n{:#?}\n----- Create '{}' Error -----\n", &topic, &error, &topic, );
@@ -86,20 +89,20 @@ async fn create_topic<T: AsRef<str>>(topic: T) -> Result<SNSTopicARN, Terminator
 // <editor-fold desc="// SQS Queue Utilities ...">
 
 async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueARN), Terminator> {
-    println!("Ensuring existence of queue: \"{}\"", queue.as_ref());
+    let queue_name = queue.as_ref();
+    println!("Ensuring existence of queue: \"{}\"", queue_name);
 
     let suffix = CLUSTER_ENV.get().unwrap().borrow().as_suffix().to_string();
 
     let queue: String = if CLUSTER_ENV.get().unwrap().borrow().is_unknown() {
-        queue.as_ref().to_string()
+        queue_name.to_string()
     } else {
+        let suffixed_name = ResourceName::with_suffix(queue_name, &suffix);
         println!(
-            "Suffixing queue \"{}\" as \"{}-{}\" per in-cluster configuration...",
-            queue.as_ref(),
-            queue.as_ref(),
-            suffix
+            "Suffixing queue \"{}\" as \"{}\" per in-cluster configuration...",
+            queue_name, &suffixed_name
         );
-        format!("{}-{}", queue.as_ref(), suffix,)
+        suffixed_name
     };
 
     // If a usable region and account id were provided,
@@ -113,6 +116,12 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
 
     let policy: String = match (&aws_region, &aws_account_id) {
         (Some(region), Some(account_id)) => {
+            let source_arn_pattern = if ResourceName::is_fifo(&queue) {
+                format!("arn:aws:sns:{region}:{account_id}:*-{suffix}.fifo")
+            } else {
+                format!("arn:aws:sns:{region}:{account_id}:*-{suffix}")
+            };
+
             format!(
                 r#"{{
         "Version": "2008-10-17",
@@ -123,7 +132,7 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
                 "Resource": "arn:aws:sqs:{region}:{account_id}:{queue}",
                 "Condition": {{
                     "ArnLike": {{
-                        "aws:SourceArn": "arn:aws:sns:{region}:{account_id}:*-{suffix}"
+                        "aws:SourceArn": "{source_arn_pattern}"
                     }}
                 }},
                 "Principal": {{
@@ -139,8 +148,7 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
                 "Resource": "arn:aws:sqs:{region}:{account_id}:{queue}"
             }}
         ]
-    }}"#
-            )
+    }}"#)
         }
         _ => {
             let env = CLUSTER_ENV.get().unwrap().borrow();
@@ -154,16 +162,23 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
         }
     };
 
-    let resp = match SQS_CLIENT
+    let mut create_queue_builder = SQS_CLIENT
         .get()
         .unwrap()
         .borrow()
         .create_queue()
         .queue_name(&queue)
-        .attributes(QueueAttributeName::Policy, &policy)
-        .send()
-        .await
-    {
+        .attributes(QueueAttributeName::Policy, &policy);
+
+    if ResourceName::is_fifo(&queue) {
+        create_queue_builder = create_queue_builder
+            .attributes(QueueAttributeName::FifoQueue, "true")
+            // ContentBasedDeduplication enabled so we don't need to require MessageDeduplicationIds in the message,
+            // but they can still be used to override the default deduplication.
+            .attributes(QueueAttributeName::ContentBasedDeduplication, "true");
+    }
+
+    let resp = match create_queue_builder.send().await {
         Ok(response) => response,
         Err(error) => {
             return handle_create_queue_error(error, queue).await;
