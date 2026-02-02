@@ -170,11 +170,12 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
         .queue_name(&queue)
         .attributes(QueueAttributeName::Policy, &policy);
 
-    // Set FIFO queue attributes if this is a FIFO queue
     if ResourceName::is_fifo(&queue) {
         create_queue_builder = create_queue_builder
             .attributes(QueueAttributeName::FifoQueue, "true")
-            .attributes(QueueAttributeName::ContentBasedDeduplication, "false");
+            // ContentBasedDeduplication enabled so we don't need to require MessageDeduplicationIds in the message,
+            // but they can still be used to override the default deduplication.
+            .attributes(QueueAttributeName::ContentBasedDeduplication, "true");
     }
 
     let resp = match create_queue_builder.send().await {
