@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/TechnologyAdvice/pinnothera/compare/v0.1.1...v0.2.0) (2026-02-05)
+
+
+### Features
+
+* add support for fifo topics/queues ([#4](https://github.com/TechnologyAdvice/pinnothera/issues/4)) ([fcc2d08](https://github.com/TechnologyAdvice/pinnothera/commit/fcc2d08e4fb3c0872dfe9a7904f7bf57e12b5f86))
+
+
+### Bug Fixes
+
+* release ([77ad6c1](https://github.com/TechnologyAdvice/pinnothera/commit/77ad6c1cde8a6f584ee327452afe8278d27bffc9))
+
 ## [0.1.1](https://github.com/TechnologyAdvice/pinnothera/compare/v0.1.0...v0.1.1) (2024-03-28)
 
 
