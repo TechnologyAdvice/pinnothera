@@ -4,27 +4,35 @@
 
 FROM rustlang/rust:nightly-bullseye AS rust-base
 
-RUN apt update \
-    && apt upgrade -yq \
-    && apt dist-upgrade -yq \
-    && apt install -yq build-essential; \
-    apt install -yq gcc-aarch64-linux-gnu || apt install -yq gcc-x86-64-linux-gnu; \
-    apt purge -yq \
-    && apt-get clean -yq \
-    && apt-get autoclean -yq \
-    && rm -rf /var/cache/apt/archives/* \
-    && rustup toolchain install nightly \
-    && rustup default nightly \
-    && rustup target add aarch64-unknown-linux-gnu \
-                         x86_64-unknown-linux-gnu \
-                         aarch64-unknown-linux-musl \
-                         x86_64-unknown-linux-musl \
-    && rustup component add rust-src \
-                            rust-std-aarch64-unknown-linux-gnu \
-                            rust-std-aarch64-unknown-linux-musl \
-                            rust-std-x86_64-unknown-linux-gnu \
-                            rust-std-x86_64-unknown-linux-musl \
-    && cargo install cargo-chef
+# Install build deps and cross toolchains
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        pkg-config \
+        musl-tools \
+    && apt-get install -yq gcc-aarch64-linux-gnu || apt-get install -yq gcc-x86-64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup default nightly
+
+# Add all targets
+RUN rustup target add \
+        aarch64-unknown-linux-gnu \
+        x86_64-unknown-linux-gnu \
+        aarch64-unknown-linux-musl \
+        x86_64-unknown-linux-musl
+
+# Add components (rust-src + std for cross targets)
+RUN rustup component add rust-src \
+    && rustup component add \
+        rust-std-aarch64-unknown-linux-gnu \
+        rust-std-aarch64-unknown-linux-musl \
+        rust-std-x86_64-unknown-linux-gnu \
+        rust-std-x86_64-unknown-linux-musl
+
+RUN cargo install cargo-chef
 
 
 ########################################
