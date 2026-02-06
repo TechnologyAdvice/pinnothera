@@ -1,7 +1,7 @@
 [package]
 
 name = "pinnothera"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Mark S. <the@wondersmith.dev>", "Dewbud <code@dewbud.dev>"]
 license = "AGPL-3.0-or-later"
