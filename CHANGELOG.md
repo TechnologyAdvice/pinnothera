@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/TechnologyAdvice/pinnothera/compare/v0.2.1...v0.2.2) (2026-02-06)
+
+
+### Bug Fixes
+
+* remove rust:nightly reinstall that was breaking docker image build ([#7](https://github.com/TechnologyAdvice/pinnothera/issues/7)) ([9ac4304](https://github.com/TechnologyAdvice/pinnothera/commit/9ac4304b7af3d1f2c068a5528a4a1eac3e192a07))
+
 ## [0.2.1](https://github.com/TechnologyAdvice/pinnothera/compare/v0.2.0...v0.2.1) (2026-02-06)
 
 
