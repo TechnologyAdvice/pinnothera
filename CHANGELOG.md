@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/TechnologyAdvice/pinnothera/compare/v0.2.0...v0.2.1) (2026-02-06)
+
+
+### Bug Fixes
+
+* corrects Dockerfile --from target ([#5](https://github.com/TechnologyAdvice/pinnothera/issues/5)) ([15ec428](https://github.com/TechnologyAdvice/pinnothera/commit/15ec4286bb32e7b74a74807e47fbea7d939e2b7f))
+
 ## [0.2.0](https://github.com/TechnologyAdvice/pinnothera/compare/v0.1.1...v0.2.0) (2026-02-05)
 
 
