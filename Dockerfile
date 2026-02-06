@@ -2,7 +2,7 @@
 #        Base Build Environment        #
 ########################################
 
-FROM rustlang/rust:nightly-bullseye as rust-base
+FROM rustlang/rust:nightly-bullseye AS rust-base
 
 RUN apt update \
     && apt upgrade -yq \
@@ -31,7 +31,7 @@ RUN apt update \
 #          Cache Pre-Planner           #
 ########################################
 
-FROM rust-base as planner
+FROM rust-base AS planner
 
 WORKDIR /artifacts
 
@@ -45,7 +45,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 #           Artifact Factory           #
 ########################################
 
-FROM planner as artifactory
+FROM planner AS artifactory
 
 ARG cargo_profile=release
 
@@ -71,9 +71,9 @@ RUN cargo build --profile ${cargo_profile} \
 #####################################
 
 # Use distroless image for production
-FROM gcr.io/distroless/cc as pinn-image
+FROM gcr.io/distroless/cc AS pinn-image
 
-COPY --from=precompiled-artifactory /artifacts/pinnothera-bin /usr/bin/pinnothera
+COPY --from=artifactory /artifacts/pinnothera-bin /usr/bin/pinnothera
 
 CMD ["/usr/bin/pinnothera"]
 
@@ -82,7 +82,7 @@ CMD ["/usr/bin/pinnothera"]
 #         Precompiled Factory          #
 ########################################
 
-FROM alpine:latest as precompiled-artifactory
+FROM alpine:latest AS precompiled-artifactory
 
 ARG profile='release'
 
@@ -106,7 +106,7 @@ RUN export TARGET_OS="$(uname -s | awk '{ print tolower($0) }')" \
 #####################################
 
 # Use distroless image for production
-FROM gcr.io/distroless/cc as precompiled-pinn-image
+FROM gcr.io/distroless/cc AS precompiled-pinn-image
 
 COPY --from=precompiled-artifactory /artifacts/pinnothera-bin /usr/bin/pinnothera
 
