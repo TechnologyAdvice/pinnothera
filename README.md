@@ -78,24 +78,52 @@ target/release/pinnothera
 
 ### For OCI / Docker Image(s)
 
-#### Pre-compiling Binaries Locally
+#### Pre-compiling Binaries Locally (Linux hosts)
 
 ```bash
 git clone https://github.com/the-wondersmith/pinnothera
 cd pinnothera
-OCI_TARGETS=(x86_64-unknown-linux-musl aarch-unknown-linux-musl)
-rustup target add "${OCI_TARGETS}"
-for TARGET in ${OCI_TARGETS[]@}; do cargo build --release --target "${TARGET}"; done
+OCI_TARGETS=(x86_64-unknown-linux-musl aarch64-unknown-linux-musl)
+rustup target add "${OCI_TARGETS[@]}"
+for TARGET in "${OCI_TARGETS[@]}"; do cargo build --release --target "${TARGET}"; done
 ```
 
-> NOTE: Building binaries for targets _other_ than your local system will
-> most likely require you to have one or more cross-compilation
-> toolchains installed. Check the [Dockerfile](Dockerfile) for relevant `apt`
-> packages for Linux hosts. Check [crosstool-ng](https://crosstool-ng.github.io/)
-> for macOS hosts. Windows hosts should... really know better, I suppose.
+Then move the compiled binaries into `artifacts/` with the names the Dockerfile expects:
 
-After cargo finishes, move the compiled binaries from `target/{ARCH}/release` into
-the `artifacts/` directory, then run:
+```bash
+mkdir -p artifacts
+for ARCH in amd64 arm64; do
+    TARGET="$( [ "$ARCH" = "amd64" ] && echo x86_64 || echo aarch64 )-unknown-linux-musl"
+    cp target/${TARGET}/release/pinnothera artifacts/pinnothera-${ARCH}-linux-release
+done
+```
+
+#### Pre-compiling Binaries on macOS (Apple Silicon / M-series)
+
+`rustup target add` only installs the Rust standard library for a target; cross-compiling to Linux from macOS also requires a **linker** and (for some crates) a C toolchain for the target. The following options avoid building a full toolchain yourself (e.g. crosstool-ng).
+
+**Use `cross`**
+
+[`cross`](https://github.com/cross-rs/cross) runs the build inside a Docker container that already has the correct linker and toolchain. You only need Docker and Rust on the host; no need to install Linux linkers or crosstool-ng.
+
+This repo includes a [Cross.toml](Cross.toml) that pins the Docker images for the Linux targets so `cross` uses the container instead of falling back to the host (which can happen on Apple Silicon and then fail with "couldn't install toolchain").
+
+```bash
+# Install cross
+cargo install cross
+
+# Build and copy binaries for both container platforms (uses Docker; no rustup target needed on host)
+mkdir -p artifacts
+for ARCH in amd64 arm64; do
+    TARGET="$( [ "$ARCH" = "amd64" ] && echo x86_64 || echo aarch64 )-unknown-linux-musl"
+    cross build --release --target "$TARGET"
+    cp "target/${TARGET}/release/pinnothera" "artifacts/pinnothera-${ARCH}-linux-release"
+done
+```
+
+---
+
+After you have the binaries in `artifacts/` (by any of the methods above), run:
 
 ```bash
 docker buildx build --push --platform='linux/arm64,linux/amd64' --tag='docker.io/{USERNAME}/pinnothera:{TAG}' --target='precompiled-pinn-image' -f Dockerfile .
