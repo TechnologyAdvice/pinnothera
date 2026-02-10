@@ -333,11 +333,14 @@ async fn apply_queue_configuration<T: AsRef<str>>(
     queue: T,
     config: SQSQueueConfig,
 ) -> Result<u8, u8> {
+    let queue_name = queue.as_ref();
+    println!("Applying configuration for queue: \"{}\"", queue_name);
+
     // Create a convenient place to accumulate
     // the task handles we're about to create
     let mut tasks: Vec<_> = Vec::new();
 
-    if queue.as_ref() == "unsubscribed" {
+    if queue_name == "unsubscribed" {
         // If the supplied queue is actually the sentinel value
         // "unsubscribed", just create the configured topics but
         // don't attempt to subscribe them to anything
@@ -355,6 +358,7 @@ async fn apply_queue_configuration<T: AsRef<str>>(
         let (_queue_url, queue_arn) = match create_queue(queue).await {
             Ok((url, arn)) => (url, arn),
             Err(_) => {
+                log_err!("Queue configuration failed for queue \"{}\" (see error above)", queue_name);
                 return Err(1);
             }
         };
