@@ -196,6 +196,7 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
     let resp = match create_queue_builder.send().await {
         Ok(response) => response,
         Err(error) => {
+            log_err!("Error creating queue \"{}\": {:#?}", &queue, &error);
             return handle_create_queue_error(error, queue).await;
         }
     };
