@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/TechnologyAdvice/pinnothera/compare/v0.3.0...v0.3.1) (2026-02-10)
+
+
+### Bug Fixes
+
+* enhance logging for queue configuration application ([ba05132](https://github.com/TechnologyAdvice/pinnothera/commit/ba05132838fed3bf57ddc4e4804a2bf812c0d429))
+
 ## [0.3.0](https://github.com/TechnologyAdvice/pinnothera/compare/v0.2.2...v0.3.0) (2026-02-10)
 
 
