@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/TechnologyAdvice/pinnothera/compare/v0.3.2...v0.3.3) (2026-02-10)
+
+
+### Bug Fixes
+
+* setup fifo with high throughput mode and sync attributes between topic and queue ([#9](https://github.com/TechnologyAdvice/pinnothera/issues/9)) ([a613e55](https://github.com/TechnologyAdvice/pinnothera/commit/a613e55712eb62d5980c2a1bbd91df3a4b3e6a05))
+
 ## [0.3.2](https://github.com/TechnologyAdvice/pinnothera/compare/v0.3.1...v0.3.2) (2026-02-10)
 
 
