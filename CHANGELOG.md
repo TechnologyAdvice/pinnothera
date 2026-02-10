@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/TechnologyAdvice/pinnothera/compare/v0.2.2...v0.3.0) (2026-02-10)
+
+
+### Features
+
+* Improve logging and error handling and docs ([#10](https://github.com/TechnologyAdvice/pinnothera/issues/10)) ([a73d025](https://github.com/TechnologyAdvice/pinnothera/commit/a73d025b3165c97c253eb85c370e787d14cdb83f))
+
 ## [0.2.2](https://github.com/TechnologyAdvice/pinnothera/compare/v0.2.1...v0.2.2) (2026-02-06)
 
 

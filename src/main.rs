@@ -1,5 +1,16 @@
 // Pinnothera - a dead simple Kubernetes-native SNS/SQS configurator
 
+/// Log to stderr and flush so the message appears before exit (e.g. in k8s logs).
+/// Uses a locked handle to reduce interleaving when multiple tasks log errors concurrently.
+macro_rules! log_err {
+    ($($arg:tt)*) => {{
+        use std::io::Write;
+        let mut err = std::io::stderr().lock();
+        let _ = writeln!(err, $($arg)*);
+        let _ = err.flush();
+    }};
+}
+
 // Standard Library Imports
 use std::process::ExitCode;
 
@@ -69,15 +80,14 @@ async fn create_topic<T: AsRef<str>>(topic: T) -> Result<SNSTopicARN, Terminator
     let resp = match create_topic_builder.send().await {
         Ok(response) => response,
         Err(error) => {
-            println!("Could not create topic due to error:\n----- Create '{}' Error -----\n{:#?}\n----- Create '{}' Error -----\n", &topic, &error, &topic, );
+            log_err!("Could not create topic due to error:\n----- Create '{}' Error -----\n{:#?}\n----- Create '{}' Error -----\n", &topic, &error, &topic);
             return Err(error.into());
         }
     };
 
     match resp.topic_arn() {
         None => {
-            println!("Creation of topic \"{}\" did not return an error, but did not return an ARN as expected",
-                     &topic);
+            log_err!("Creation of topic \"{}\" did not return an error, but did not return an ARN as expected", &topic);
             bail!("")
         }
         Some(value) => {
@@ -159,7 +169,7 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
             if env.is_local() || env.is_unknown() {
                 String::new()
             } else {
-                println!("ERROR: Cannot create a valid access policy for queue '{}' with values: [aws-region: {:?}, aws-account-id: {:?}]", &queue, &aws_region, &aws_account_id, );
+                log_err!("ERROR: Cannot create a valid access policy for queue '{}' with values: [aws-region: {:?}, aws-account-id: {:?}]", &queue, &aws_region, &aws_account_id);
                 bail!("")
             }
         }
@@ -193,10 +203,7 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
     let queue_url = match resp.queue_url() {
         Some(value) => value.to_string(),
         None => {
-            println!(
-                "Creation of queue \"{}\" did not return an error, but did not return a URL as expected",
-                &queue
-            );
+            log_err!("Creation of queue \"{}\" did not return an error, but did not return a URL as expected", &queue);
             bail!("")
         }
     };
@@ -222,10 +229,7 @@ async fn get_queue_arn_from_url(
 
     let queue_arn = match attributes.get(&QueueAttributeName::QueueArn) {
         None => {
-            println!(
-                "ARN retrieval attempt for queue URL \"{}\" did not return an error, but did not return an associated ARN as expected",
-                &url,
-            );
+            log_err!("ARN retrieval attempt for queue URL \"{}\" did not return an error, but did not return an associated ARN as expected", &url);
             bail!("")
         }
         Some(value) => {
@@ -257,7 +261,7 @@ async fn handle_create_queue_error(
             {
                 Ok(response) => response,
                 Err(get_url_error) => {
-                    println!("Queue exists, but could not retrieve its url due to error:\n----- Get Queue URL '{}' Error -----\n{:#?}\n----- Get Queue URL '{}' Error -----\n", &queue, &get_url_error, &queue, );
+                    log_err!("Queue exists, but could not retrieve its url due to error:\n----- Get Queue URL '{}' Error -----\n{:#?}\n----- Get Queue URL '{}' Error -----\n", &queue, &get_url_error, &queue);
                     return Err(get_url_error.into());
                 }
             };
@@ -265,10 +269,7 @@ async fn handle_create_queue_error(
             let queue_url = match resp.queue_url() {
                 Some(value) => value.to_string(),
                 None => {
-                    println!(
-                        "URL retrieval attempt for queue \"{}\" did not return an error, but did not return a URL as expected",
-                        &queue
-                    );
+                    log_err!("URL retrieval attempt for queue \"{}\" did not return an error, but did not return a URL as expected", &queue);
                     bail!("")
                 }
             };
@@ -277,7 +278,7 @@ async fn handle_create_queue_error(
         }
     };
 
-    println!("Could not create queue due to error:\n----- Create '{}' Error -----\n{:#?}\n----- Create '{}' Error -----\n", &queue, &error, &queue, );
+    log_err!("Could not create queue due to error:\n----- Create '{}' Error -----\n{:#?}\n----- Create '{}' Error -----\n", &queue, &error, &queue);
 
     return Err(error.into());
 }
@@ -313,18 +314,14 @@ async fn create_subscription<T: AsRef<str>>(queue_arn: T, topic: T) -> Result<u8
     {
         Ok(response) => response,
         Err(error) => {
-            println!("Could not ensure subscription of queue to topic due to error:\n----- Subscribe '{}' to '{}' Error -----\n{:#?}\n----- Subscribe '{}' to '{}' Error -----\n", queue_arn, topic, &error, queue_arn, topic, );
+            log_err!("Could not ensure subscription of queue to topic due to error:\n----- Subscribe '{}' to '{}' Error -----\n{:#?}\n----- Subscribe '{}' to '{}' Error -----\n", queue_arn, topic, &error, queue_arn, topic);
             return Err(1);
         }
     };
 
     match subscription.subscription_arn {
         None => {
-            println!(
-                "Subscription of topic \"{}\" to queue ARN \"{}\" did not return an error,\
-             but did not return a subscription ARN either",
-                topic, queue_arn
-            );
+            log_err!("Subscription of topic \"{}\" to queue ARN \"{}\" did not return an error, but did not return a subscription ARN either", topic, queue_arn);
             Err(1)
         }
         Some(arn) => {
@@ -371,7 +368,10 @@ async fn apply_queue_configuration<T: AsRef<str>>(
         config.topics.iter().for_each(|topic| {
             let (task_topic, task_arn) = (topic.to_string(), queue_arn.clone());
             tasks.push(tokio::spawn(async move {
-                create_subscription(task_arn, task_topic).await.unwrap()
+                match create_subscription(task_arn, task_topic).await {
+                    Ok(v) => v,
+                    Err(v) => v,
+                }
             }));
         })
     }
@@ -403,7 +403,7 @@ async fn main() -> ExitCode {
     let (env_name, pinn_config) = match args.pinn_config().await {
         Ok((name, config)) => (name, config),
         Err(error) => {
-            println!(
+            log_err!(
                 "\n\n{:#?}\n\nCould not parse or acquire usable pinnothera configuration due to ^\n\n",
                 error
             );
@@ -422,7 +422,7 @@ async fn main() -> ExitCode {
         match CLI_ARGS.get().unwrap().borrow().aws_client_configs().await {
             Ok((sns, sqs, sts)) => (sns, sqs, sts),
             Err(error) => {
-                println!(
+                log_err!(
                     "\n\n{:#?}\n\nCould not create usable AWS configuration due to ^\n\n",
                     error
                 );
@@ -473,20 +473,41 @@ async fn main() -> ExitCode {
         .collect();
 
     // Wait for all of the spawned tasks to finish
-    let results: Vec<u8> = futures_util::future::join_all(tasks)
-        .await
-        .iter()
+    let join_results: Vec<_> = futures_util::future::join_all(tasks).await;
+
+    let results: Vec<u8> = join_results
+        .into_iter()
         .map(|result| match result {
-            Ok(value) => *value,
-            Err(_) => 1 as u8,
+            Ok(value) => value,
+            Err(join_err) => {
+                if join_err.is_cancelled() {
+                    log_err!("A queue-configuration task was cancelled");
+                } else {
+                    match join_err.try_into_panic() {
+                        Ok(panic_payload) => {
+                            if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                                log_err!("A queue-configuration task panicked: {s}");
+                            } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                                log_err!("A queue-configuration task panicked: {s}");
+                            } else {
+                                log_err!("A queue-configuration task panicked (non-string payload)");
+                            }
+                        }
+                        Err(e) => {
+                            log_err!("A queue-configuration task did not complete successfully: {e}");
+                        }
+                    }
+                }
+                1_u8
+            }
         })
         .collect();
 
-    let exit_code = results.iter().sum::<u8>();
+    let exit_code: u8 = results.iter().sum();
 
     if exit_code >= 1 {
-        println!(
-            "\n\n^^^^^^^^\nThe above errors were encountered after running with arguments: {:#?}\n\n⌄⌄⌄⌄⌄⌄⌄⌄",
+        log_err!(
+            "\n^^^^^^^^\nThe above errors were encountered after running with arguments: {:#?}\n⌄⌄⌄⌄⌄⌄⌄⌄",
             CLI_ARGS.get().unwrap().borrow()
         );
     }
