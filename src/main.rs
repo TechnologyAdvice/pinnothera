@@ -71,7 +71,10 @@ async fn create_topic<T: AsRef<str>>(topic: T) -> Result<SNSTopicARN, Terminator
         .name(&topic);
 
     if ResourceName::is_fifo(&topic) {
-        create_topic_builder = create_topic_builder.attributes("FifoTopic", "true");
+        create_topic_builder = create_topic_builder
+            .attributes("FifoTopic", "true")
+            .attributes("ContentBasedDeduplication", "true")
+            .attributes("FifoThroughputScope", "MessageGroup");
     }
 
     let resp = match create_topic_builder.send().await {
@@ -185,7 +188,9 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
             .attributes(QueueAttributeName::FifoQueue, "true")
             // ContentBasedDeduplication enabled so we don't need to require MessageDeduplicationIds in the message,
             // but they can still be used to override the default deduplication.
-            .attributes(QueueAttributeName::ContentBasedDeduplication, "true");
+            .attributes(QueueAttributeName::ContentBasedDeduplication, "true")
+            .attributes(QueueAttributeName::DeduplicationScope, "messageGroup")
+            .attributes(QueueAttributeName::FifoThroughputLimit, "perMessageGroupId");
     }
 
     let resp = match create_queue_builder.send().await {
