@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/TechnologyAdvice/pinnothera/compare/v0.3.1...v0.3.2) (2026-02-10)
+
+
+### Bug Fixes
+
+* ensure queue name is a string for configuration application ([73b54b8](https://github.com/TechnologyAdvice/pinnothera/commit/73b54b8efdead862089e08894c5def78177c99b4))
+
 ## [0.3.1](https://github.com/TechnologyAdvice/pinnothera/compare/v0.3.0...v0.3.1) (2026-02-10)
 
 
