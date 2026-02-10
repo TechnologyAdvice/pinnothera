@@ -333,7 +333,7 @@ async fn apply_queue_configuration<T: AsRef<str>>(
     queue: T,
     config: SQSQueueConfig,
 ) -> Result<u8, u8> {
-    let queue_name = queue.as_ref();
+    let queue_name = queue.as_ref().to_string();
     println!("Applying configuration for queue: \"{}\"", queue_name);
 
     // Create a convenient place to accumulate
@@ -355,7 +355,7 @@ async fn apply_queue_configuration<T: AsRef<str>>(
         });
     } else {
         // Get the specified queue's URL and ARN
-        let (_queue_url, queue_arn) = match create_queue(queue).await {
+        let (_queue_url, queue_arn) = match create_queue(&queue_name).await {
             Ok((url, arn)) => (url, arn),
             Err(_) => {
                 log_err!("Queue configuration failed for queue \"{}\" (see error above)", queue_name);
