@@ -231,9 +231,9 @@ async fn get_queue_arn_from_url(
         .send()
         .await
     {
-        Ok(response) => response.attributes.unwrap_or_default(),
+        Ok(resp) => response.attributes.unwrap_or_default(),
         Err(error) => {
-            log_err!("Could not retrieve queue attributes for queue \"{}\" (URL: \"{}\") due to error:\n----- Get Queue Attributes '{}' Error -----\n{:#?}\n----- Get Queue Attributes '{}' Error -----\n", &queue, &url, &queue, &error, &queue);
+            log_err!("Failed to get queue attributes for queue \"{}\" (URL: \"{}\") due to error:\n----- Get Queue Attributes Error -----\n{:#?}\n----- Get Queue Attributes Error -----\n", &queue, &url, &error);
             return Err(error.into());
         }
     };
