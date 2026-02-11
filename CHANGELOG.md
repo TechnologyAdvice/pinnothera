@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/TechnologyAdvice/pinnothera/compare/v0.4.0...v0.5.0) (2026-02-11)
+
+
+### Features
+
+* capture errors from get queue url request ([#18](https://github.com/TechnologyAdvice/pinnothera/issues/18)) ([d50f09b](https://github.com/TechnologyAdvice/pinnothera/commit/d50f09bed9126abbf4d81c6af30667bb5f8be0e6))
+
 ## [0.4.0](https://github.com/TechnologyAdvice/pinnothera/compare/v0.3.3...v0.4.0) (2026-02-10)
 
 
