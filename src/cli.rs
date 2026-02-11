@@ -3,18 +3,18 @@
 // Standard Library Imports
 use std::fmt::Formatter;
 use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
 
 // Third Party Imports
 use atomicell::AtomicCell;
 use aws_sdk_sns::config::Config as SNSClientConfig;
 use aws_sdk_sqs::config::Config as SQSClientConfig;
 use aws_sdk_sts::config::Config as STSClientConfig;
-use aws_types::credentials::{
-    future::ProvideCredentials as ProvideAWSCredentials, Credentials as AWSCredentials,
-    CredentialsError as AWSCredentialsError, ProvideCredentials as AWSCredentialProvider,
-    SharedCredentialsProvider as SharedAWSCredentialsProvider,
+use aws_credential_types::{
+    provider::future::ProvideCredentials as ProvideAWSCredentials,
+    Credentials as AWSCredentials,
+    provider::error::CredentialsError as AWSCredentialsError,
+    provider::ProvideCredentials as AWSCredentialProvider,
+    provider::SharedCredentialsProvider as SharedAWSCredentialsProvider,
 };
 use aws_types::{region::Region, SdkConfig as AWSConfig};
 use clap::Parser;
@@ -137,7 +137,7 @@ impl std::fmt::Debug for CLICredentialProvider {
 }
 
 impl CLICredentialProvider {
-    async fn aws_credentials(&self) -> aws_types::credentials::Result {
+    async fn aws_credentials(&self) -> aws_credential_types::provider::Result {
         Ok(AWSCredentials::new(
             self.access_key_id.as_str(),
             self.secret_access_key.as_str(),
@@ -184,7 +184,7 @@ impl CLIArgs {
         &self,
     ) -> Result<(SNSClientConfig, SQSClientConfig, STSClientConfig), Terminator> {
         // Infer and create an AWS `Config` from the current environment
-        let config: AWSConfig = aws_config::load_from_env().await;
+        let config: AWSConfig = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
 
         let (sns_config, sqs_config, sts_config) = (
             aws_sdk_sns::config::Builder::from(&config),
@@ -216,21 +216,9 @@ impl CLIArgs {
 
         if let Some(url) = endpoint {
             let url = url.to_string();
-            sns_config.set_endpoint_resolver(Some(Arc::new(
-                aws_smithy_http::endpoint::Endpoint::immutable(
-                    http::Uri::from_str(url.as_str()).unwrap(),
-                ),
-            )));
-            sqs_config.set_endpoint_resolver(Some(Arc::new(
-                aws_smithy_http::endpoint::Endpoint::immutable(
-                    http::Uri::from_str(url.as_str()).unwrap(),
-                ),
-            )));
-            sts_config.set_endpoint_resolver(Some(Arc::new(
-                aws_smithy_http::endpoint::Endpoint::immutable(
-                    http::Uri::from_str(url.as_str()).unwrap(),
-                ),
-            )));
+            sns_config.set_endpoint_url(Some(url.clone()));
+            sqs_config.set_endpoint_url(Some(url.clone()));
+            sts_config.set_endpoint_url(Some(url.clone()));
         }
 
         if self.aws_access_key_id.is_some() & self.aws_secret_access_key.is_some() {

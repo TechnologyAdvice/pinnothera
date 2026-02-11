@@ -17,11 +17,16 @@ use std::process::ExitCode;
 // Third Party Imports
 use atomicell::AtomicCell;
 use aws_sdk_sns::Client as SNSClient;
-use aws_sdk_sqs::error::CreateQueueError;
-use aws_sdk_sqs::model::QueueAttributeName;
+use aws_sdk_sqs::operation::create_queue::CreateQueueError;
+use aws_sdk_sqs::types::QueueAttributeName;
 use aws_sdk_sqs::Client as SQSClient;
 use aws_sdk_sts::Client as STSClient;
-use aws_smithy_http::result::SdkError;
+use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_runtime_api::http::Response;
+
+// Type alias for create queue SDK errors
+// The response type is the raw HTTP response from the SDK
+type CreateQueueSdkError = SdkError<CreateQueueError, Response>;
 use clap;
 use easy_error::{bail, Terminator};
 use once_cell::sync::OnceCell;
@@ -216,7 +221,7 @@ async fn get_queue_arn_from_url(
     queue: String,
     url: String,
 ) -> Result<(SQSQueueURL, SQSQueueARN), Terminator> {
-    let response = match SQS_CLIENT
+    let attributes = match SQS_CLIENT
         .get()
         .unwrap()
         .borrow()
@@ -226,14 +231,12 @@ async fn get_queue_arn_from_url(
         .send()
         .await
     {
-        Ok(resp) => resp,
+        Ok(resp) => response.attributes.unwrap_or_default(),
         Err(error) => {
-            log_err!("Failed to get queue attributes for queue URL \"{}\":\n----- Get Queue Attributes Error -----\n{:#?}\n----- Get Queue Attributes Error -----\n", &url, &error);
+            log_err!("Failed to get queue attributes for queue \"{}\" (URL: \"{}\") due to error:\n----- Get Queue Attributes Error -----\n{:#?}\n----- Get Queue Attributes Error -----\n", &queue, &url, &error);
             return Err(error.into());
         }
     };
-
-    let attributes = response.attributes.unwrap_or_default();
 
     let queue_arn = match attributes.get(&QueueAttributeName::QueueArn) {
         None => {
@@ -253,11 +256,11 @@ async fn get_queue_arn_from_url(
 }
 
 async fn handle_create_queue_error(
-    error: SdkError<CreateQueueError>,
+    error: CreateQueueSdkError,
     queue: String,
 ) -> Result<(SQSQueueURL, SQSQueueARN), Terminator> {
-    if let SdkError::ServiceError { ref err, .. } = error {
-        if err.is_queue_name_exists() {
+    if let SdkError::ServiceError(service_err) = &error {
+        if service_err.err().is_queue_name_exists() {
             let resp = match SQS_CLIENT
                 .get()
                 .unwrap()
