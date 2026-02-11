@@ -216,7 +216,7 @@ async fn get_queue_arn_from_url(
     queue: String,
     url: String,
 ) -> Result<(SQSQueueURL, SQSQueueARN), Terminator> {
-    let attributes = SQS_CLIENT
+    let response = match SQS_CLIENT
         .get()
         .unwrap()
         .borrow()
@@ -224,9 +224,16 @@ async fn get_queue_arn_from_url(
         .queue_url(&url)
         .attribute_names(QueueAttributeName::QueueArn)
         .send()
-        .await?
-        .attributes
-        .unwrap_or_default();
+        .await
+    {
+        Ok(resp) => resp,
+        Err(error) => {
+            log_err!("Failed to get queue attributes for queue URL \"{}\":\n----- Get Queue Attributes Error -----\n{:#?}\n----- Get Queue Attributes Error -----\n", &url, &error);
+            return Err(error.into());
+        }
+    };
+
+    let attributes = response.attributes.unwrap_or_default();
 
     let queue_arn = match attributes.get(&QueueAttributeName::QueueArn) {
         None => {
