@@ -24,39 +24,102 @@ jobs:
           release-type: rust
           token: ${{ secrets.GH_PAT }}
 
-  build_and_release_docker_image:
-    name: Build & Release Docker Image
-    runs-on: ubuntu-latest
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
     needs: release
     if: ${{ needs.release.outputs.release_created }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
+      - name: Prepare
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.release.outputs.tag_name }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ secrets.DOCKER_REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Build and Push
-        uses: docker/build-push-action@v5
+      # Push image content without tags; merge job applies tags atomically
+      # after all platforms are built. This avoids tag races between runners.
+      - name: Build and push by digest
+        id: build-push
+        uses: docker/build-push-action@v7
         with:
           context: .
-          push: true
-          platforms: |
-            linux/amd64
           target: pinn-image
-          tags: |
-            ${{ secrets.DOCKER_REPOSITORY }}:latest
-            ${{ secrets.DOCKER_REPOSITORY }}:${{ needs.release.outputs.major }}
-            ${{ secrets.DOCKER_REPOSITORY }}:${{ needs.release.outputs.major }}.${{ needs.release.outputs.minor }}
-            ${{ secrets.DOCKER_REPOSITORY }}:${{ needs.release.outputs.major }}.${{ needs.release.outputs.minor }}.${{ needs.release.outputs.patch }}
-          cache-from: "type=registry,ref=${{ secrets.DOCKER_REPOSITORY }}:cache"
-          cache-to: "type=registry,ref=${{ secrets.DOCKER_REPOSITORY }}:cache,mode=max"
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,"name=${{ secrets.DOCKER_REPOSITORY }}",push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ secrets.DOCKER_REPOSITORY }}:cache-${{ env.PLATFORM_PAIR }}
+          cache-to: type=registry,ref=${{ secrets.DOCKER_REPOSITORY }}:cache-${{ env.PLATFORM_PAIR }},mode=max
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build-push.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge multi-arch manifest
+    needs: [release, build]
+    if: ${{ !cancelled() && needs.release.outputs.release_created && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to Docker
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      # Combine per-platform digests into a single multi-arch manifest list
+      # and apply the same semver tags as before (latest + major/minor/patch).
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          REPO="${{ secrets.DOCKER_REPOSITORY }}"
+          MAJOR="${{ needs.release.outputs.major }}"
+          MINOR="${{ needs.release.outputs.minor }}"
+          PATCH="${{ needs.release.outputs.patch }}"
+          docker buildx imagetools create \
+            -t "${REPO}:latest" \
+            -t "${REPO}:${MAJOR}" \
+            -t "${REPO}:${MAJOR}.${MINOR}" \
+            -t "${REPO}:${MAJOR}.${MINOR}.${PATCH}" \
+            $(printf '%s@sha256:%s ' "${REPO}" *)
