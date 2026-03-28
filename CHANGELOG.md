@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/TechnologyAdvice/pinnothera/compare/v0.6.0...v0.6.1) (2026-03-28)
+
+
+### Bug Fixes
+
+* rename CI workflow to release and update Docker build command format ([3a15b90](https://github.com/TechnologyAdvice/pinnothera/commit/3a15b906fbdf50f31d6627b4975bad9b605ad860))
+
 ## [0.6.0](https://github.com/TechnologyAdvice/pinnothera/compare/v0.5.0...v0.6.0) (2026-03-28)
 
 
