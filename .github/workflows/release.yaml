@@ -1,4 +1,4 @@
-name: ci
+name: release
 
 on:
   push:
@@ -117,9 +117,11 @@ jobs:
           MAJOR="${{ needs.release.outputs.major }}"
           MINOR="${{ needs.release.outputs.minor }}"
           PATCH="${{ needs.release.outputs.patch }}"
+          # One "%s" per digest file; do not use two "%s" with REPO and * (breaks
+          # with 2+ files: printf pairs args and yields "hash@sha256:" for the tail).
           docker buildx imagetools create \
             -t "${REPO}:latest" \
             -t "${REPO}:${MAJOR}" \
             -t "${REPO}:${MAJOR}.${MINOR}" \
             -t "${REPO}:${MAJOR}.${MINOR}.${PATCH}" \
-            $(printf '%s@sha256:%s ' "${REPO}" *)
+            $(printf "${REPO}@sha256:%s " *)
