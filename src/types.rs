@@ -112,11 +112,68 @@ impl ResourceName {
 
 // </editor-fold desc="// FIFO Utilities ...">
 
+// <editor-fold desc="// TopicConfig ...">
+
+/// A subscribed topic, either just its name or a name plus an SNS
+/// subscription filter policy (matched against the message body).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum TopicConfig {
+    Name(String),
+    Filtered {
+        name: String,
+        filter_policy: BTreeMap<String, Vec<String>>,
+    },
+}
+
+impl TopicConfig {
+    pub fn name(&self) -> &str {
+        match self {
+            TopicConfig::Name(name) => name,
+            TopicConfig::Filtered { name, .. } => name,
+        }
+    }
+
+    /// Serializes the filter policy (if any) to the JSON string SNS expects
+    /// as the `FilterPolicy` subscription attribute.
+    pub fn filter_policy_json(&self) -> Option<String> {
+        match self {
+            TopicConfig::Name(_) => None,
+            TopicConfig::Filtered { filter_policy, .. } => serde_json::to_string(filter_policy).ok(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod topic_config_tests {
+    use super::TopicConfig;
+
+    #[test]
+    fn plain_string_topic_has_no_filter_policy() {
+        let topic: TopicConfig = serde_yaml::from_str("bulk-enrichment-completed").unwrap();
+        assert_eq!(topic.name(), "bulk-enrichment-completed");
+        assert_eq!(topic.filter_policy_json(), None);
+    }
+
+    #[test]
+    fn filtered_topic_serializes_its_filter_policy_as_json() {
+        let yaml = "name: bulk-enrichment-completed\nfilter_policy:\n  request_source:\n    - el_dorado\n";
+        let topic: TopicConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(topic.name(), "bulk-enrichment-completed");
+        assert_eq!(
+            topic.filter_policy_json(),
+            Some(r#"{"request_source":["el_dorado"]}"#.to_string())
+        );
+    }
+}
+
+// </editor-fold desc="// TopicConfig ...">
+
 // <editor-fold desc="// SQSQueueConfig ...">
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub(crate) struct SQSQueueConfig {
-    pub topics: Vec<String>,
+    pub topics: Vec<TopicConfig>,
 }
 
 // </editor-fold desc="// SQSQueueConfig struct ...">
