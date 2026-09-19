@@ -30,6 +30,7 @@ use once_cell::sync::OnceCell;
 pub(crate) use cli::CLIArgs;
 pub(crate) use types::{
     EnvName, PinnConfig, ResourceName, SNSTopicARN, SQSQueueARN, SQSQueueConfig, SQSQueueURL,
+    TopicConfig,
 };
 
 pub(crate) mod cli;
@@ -295,9 +296,9 @@ async fn handle_create_queue_error(
 
 // <editor-fold desc="// SNS->SQS Subscription Utilities ...">
 
-async fn create_subscription<T: AsRef<str>>(queue_arn: T, topic: T) -> Result<u8, u8> {
-    let (queue_arn, topic): (&str, &str) = (queue_arn.as_ref(), topic.as_ref());
-    let topic_arn = match create_topic(topic).await {
+async fn create_subscription(queue_arn: SQSQueueARN, topic: TopicConfig) -> Result<u8, u8> {
+    let topic_name = topic.name();
+    let topic_arn = match create_topic(topic_name).await {
         Ok(arn) => arn,
         Err(_) => {
             return Err(1);
@@ -306,7 +307,7 @@ async fn create_subscription<T: AsRef<str>>(queue_arn: T, topic: T) -> Result<u8
 
     println!(
         "Ensuring queue \"{}\" is subscribed to topic [name: \"{}\", arn: \"{}\"] ...",
-        topic, &topic_arn, queue_arn,
+        topic_name, &topic_arn, &queue_arn,
     );
 
     let subscription = match SNS_CLIENT
@@ -316,30 +317,88 @@ async fn create_subscription<T: AsRef<str>>(queue_arn: T, topic: T) -> Result<u8
         .subscribe()
         .topic_arn(&topic_arn)
         .protocol("sqs")
-        .endpoint(queue_arn)
+        .endpoint(&queue_arn)
         .send()
         .await
     {
         Ok(response) => response,
         Err(error) => {
-            log_err!("Could not ensure subscription of queue to topic due to error:\n----- Subscribe '{}' to '{}' Error -----\n{:#?}\n----- Subscribe '{}' to '{}' Error -----\n", queue_arn, topic, &error, queue_arn, topic);
+            log_err!("Could not ensure subscription of queue to topic due to error:\n----- Subscribe '{}' to '{}' Error -----\n{:#?}\n----- Subscribe '{}' to '{}' Error -----\n", &queue_arn, topic_name, &error, &queue_arn, topic_name);
             return Err(1);
         }
     };
 
     match subscription.subscription_arn {
         None => {
-            log_err!("Subscription of topic \"{}\" to queue ARN \"{}\" did not return an error, but did not return a subscription ARN either", topic, queue_arn);
+            log_err!("Subscription of topic \"{}\" to queue ARN \"{}\" did not return an error, but did not return a subscription ARN either", topic_name, &queue_arn);
             Err(1)
         }
         Some(arn) => {
             println!(
                 "Queue \"{}\" is subscribed to topic w/ ARN: \"{}\"",
-                queue_arn, &arn
+                &queue_arn, &arn
             );
+
+            // `Subscribe` only applies its initial attributes when it *creates* a subscription;
+            // re-running it against one that already exists is a no-op, so the filter policy is
+            // applied explicitly here to converge on every run, in both directions.
+            if apply_filter_policy(&arn, topic.filter_policy_json())
+                .await
+                .is_err()
+            {
+                return Err(1);
+            }
+
             Ok(0)
         }
     }
+}
+
+/// Ensures a subscription's `FilterPolicy` (and `FilterPolicyScope`) attributes match the
+/// desired filter policy, clearing them when `filter_policy_json` is `None`.
+async fn apply_filter_policy(
+    subscription_arn: &str,
+    filter_policy_json: Option<String>,
+) -> Result<(), Terminator> {
+    let filter_policy_value = filter_policy_json.unwrap_or_default();
+
+    if let Err(error) = SNS_CLIENT
+        .get()
+        .unwrap()
+        .borrow()
+        .set_subscription_attributes()
+        .subscription_arn(subscription_arn)
+        .attribute_name("FilterPolicy")
+        .attribute_value(&filter_policy_value)
+        .send()
+        .await
+    {
+        log_err!("Could not set 'FilterPolicy' attribute on subscription \"{}\" due to error:\n{:#?}", subscription_arn, &error);
+        return Err(error.into());
+    }
+
+    if filter_policy_value.is_empty() {
+        return Ok(());
+    }
+
+    // Filtering on the message body (rather than SNS message attributes) so
+    // publishers don't need to duplicate fields as attributes just for filtering.
+    if let Err(error) = SNS_CLIENT
+        .get()
+        .unwrap()
+        .borrow()
+        .set_subscription_attributes()
+        .subscription_arn(subscription_arn)
+        .attribute_name("FilterPolicyScope")
+        .attribute_value("MessageBody")
+        .send()
+        .await
+    {
+        log_err!("Could not set 'FilterPolicyScope' attribute on subscription \"{}\" due to error:\n{:#?}", subscription_arn, &error);
+        return Err(error.into());
+    }
+
+    Ok(())
 }
 
 async fn apply_queue_configuration<T: AsRef<str>>(
@@ -358,7 +417,7 @@ async fn apply_queue_configuration<T: AsRef<str>>(
         // "unsubscribed", just create the configured topics but
         // don't attempt to subscribe them to anything
         config.topics.iter().for_each(|topic| {
-            let task_topic = topic.to_string();
+            let task_topic = topic.name().to_string();
             tasks.push(tokio::spawn(async {
                 match create_topic(task_topic).await {
                     Ok(_) => 0,
@@ -378,7 +437,7 @@ async fn apply_queue_configuration<T: AsRef<str>>(
 
         // Create the queue's required subscriptions
         config.topics.iter().for_each(|topic| {
-            let (task_topic, task_arn) = (topic.to_string(), queue_arn.clone());
+            let (task_topic, task_arn) = (topic.clone(), queue_arn.clone());
             tasks.push(tokio::spawn(async move {
                 match create_subscription(task_arn, task_topic).await {
                     Ok(v) => v,
