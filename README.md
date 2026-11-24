@@ -13,6 +13,16 @@ is deployed to a cluster.
 `pinnothera` is intended to run _inside_ a Kubernetes cluster, but _will_ run locally
 without fuss (provided your local environment has the expected environment variables set).
 
+### Configuration
+
+The configuration maps each queue name to the topics it subscribes to, plus an optional
+`visibilityTimeout` in seconds (0 to 43200). Set the timeout longer than the longest job a
+consumer runs, or SQS hands a message that's still being worked to a second consumer.
+pinnothera sets it on every run, and leaves the queue's current value alone when the key
+is absent, so removing the key doesn't put the queue back to the SQS default of 30
+seconds. The special `unsubscribed` entry only creates its topics.
+[pinnothera-config.yaml](k8s/pinnothera-config.yaml) shows the full shape in YAML and JSON.
+
 ### In A Kubernetes Cluster
 
 #### Prerequisites

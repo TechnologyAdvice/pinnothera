@@ -13,6 +13,7 @@ data:
       topics:
         - <(topic-name-1)>
         - <(topic-name-2)>
+      visibilityTimeout: <(seconds)>  # Optional, 0 to 43200
     unsubscribed:
       topics:
         - <(topic-name-1)>
@@ -23,7 +24,8 @@ data:
         "topics": [
           "<(topic-name-1)>",
           "<(topic-name-2)>"
-        ]
+        ],
+        "visibilityTimeout": <(seconds)>
       },
       "unsubscribed": {
         "topics": [
