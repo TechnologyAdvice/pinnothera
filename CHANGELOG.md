@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/TechnologyAdvice/pinnothera/compare/v0.6.1...v0.7.0) (2026-11-24)
+
+
+### Features
+
+* Set a queue's visibility timeout from its config ([#24](https://github.com/TechnologyAdvice/pinnothera/issues/24)) ([48efa46](https://github.com/TechnologyAdvice/pinnothera/commit/48efa4630fb60d7a84cef7a3f10aa7a0889531a0))
+
 ## [0.6.1](https://github.com/TechnologyAdvice/pinnothera/compare/v0.6.0...v0.6.1) (2026-03-28)
 
 
