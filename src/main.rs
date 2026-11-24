@@ -101,6 +101,9 @@ async fn create_topic<T: AsRef<str>>(topic: T) -> Result<SNSTopicARN, Terminator
 
 // <editor-fold desc="// SQS Queue Utilities ...">
 
+/// The longest visibility timeout SQS accepts, 12 hours in seconds.
+const MAX_VISIBILITY_TIMEOUT: u32 = 43_200;
+
 async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueARN), Terminator> {
     let queue_name = queue.as_ref();
     println!("Ensuring existence of queue: \"{}\"", queue_name);
@@ -210,6 +213,34 @@ async fn create_queue<T: AsRef<str>>(queue: T) -> Result<(SQSQueueURL, SQSQueueA
     };
 
     get_queue_arn_from_url(queue, queue_url).await
+}
+
+async fn set_visibility_timeout<T: AsRef<str>>(
+    queue_url: T,
+    seconds: u32,
+) -> Result<(), Terminator> {
+    let queue_url = queue_url.as_ref();
+    println!(
+        "Setting the visibility timeout of queue \"{}\" to {} seconds...",
+        queue_url, seconds
+    );
+
+    match SQS_CLIENT
+        .get()
+        .unwrap()
+        .borrow()
+        .set_queue_attributes()
+        .queue_url(queue_url)
+        .attributes(QueueAttributeName::VisibilityTimeout, seconds.to_string())
+        .send()
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            log_err!("Could not set the visibility timeout of queue \"{}\" due to error:\n----- Set Queue Attributes Error -----\n{:#?}\n----- Set Queue Attributes Error -----\n", queue_url, &error);
+            Err(error.into())
+        }
+    }
 }
 
 async fn get_queue_arn_from_url(
@@ -368,13 +399,24 @@ async fn apply_queue_configuration<T: AsRef<str>>(
         });
     } else {
         // Get the specified queue's URL and ARN
-        let (_queue_url, queue_arn) = match create_queue(&queue_name).await {
+        let (queue_url, queue_arn) = match create_queue(&queue_name).await {
             Ok((url, arn)) => (url, arn),
             Err(_) => {
                 log_err!("Queue configuration failed for queue \"{}\" (see error above)", queue_name);
                 return Err(1);
             }
         };
+
+        if let Some(seconds) = config.visibility_timeout {
+            if seconds > MAX_VISIBILITY_TIMEOUT {
+                log_err!("The visibility timeout for queue \"{}\" is {} seconds, but SQS allows at most {}", queue_name, seconds, MAX_VISIBILITY_TIMEOUT);
+                return Err(1);
+            }
+            if set_visibility_timeout(&queue_url, seconds).await.is_err() {
+                log_err!("Queue configuration failed for queue \"{}\" (see error above)", queue_name);
+                return Err(1);
+            }
+        }
 
         // Create the queue's required subscriptions
         config.topics.iter().for_each(|topic| {

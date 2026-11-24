@@ -117,6 +117,12 @@ impl ResourceName {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub(crate) struct SQSQueueConfig {
     pub topics: Vec<String>,
+    /// Seconds a received message stays hidden from other consumers, from 0 to 43200.
+    /// Set it longer than the longest job a consumer runs, or SQS hands a message that's
+    /// still being worked to a second consumer. When it's unset, pinnothera leaves the
+    /// queue's current value alone.
+    #[serde(default, rename = "visibilityTimeout")]
+    pub visibility_timeout: Option<u32>,
 }
 
 // </editor-fold desc="// SQSQueueConfig struct ...">
@@ -242,3 +248,31 @@ impl PinnConfig {
 }
 
 // </editor-fold desc="// PinnConfig struct ...">
+
+#[cfg(test)]
+mod tests {
+    use super::PinnConfig;
+
+    #[test]
+    fn reads_a_queue_visibility_timeout() {
+        let config = PinnConfig::from_yaml(
+            "jobs:\n  topics:\n    - job-requested\n  visibilityTimeout: 900\n",
+        )
+        .unwrap();
+
+        assert_eq!(config["jobs"].visibility_timeout, Some(900));
+        assert_eq!(config["jobs"].topics, vec!["job-requested"]);
+    }
+
+    #[test]
+    fn leaves_the_visibility_timeout_unset_when_omitted() {
+        let config = PinnConfig::from_json(r#"{"jobs": {"topics": []}}"#).unwrap();
+
+        assert_eq!(config["jobs"].visibility_timeout, None);
+    }
+
+    #[test]
+    fn rejects_a_negative_visibility_timeout() {
+        assert!(PinnConfig::from_yaml("jobs:\n  topics: []\n  visibilityTimeout: -1\n").is_err());
+    }
+}
